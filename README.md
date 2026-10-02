@@ -1,6 +1,7 @@
 # ODIN - Open Data Independent Network
-
-(odin/capa.png)
+<p align="center">
+  <img src="capa.png" alt="ODIN Map" width="100%">
+</p>
 
 Protótipo funcional de plataforma de monitoramento global com globo 3D
 (CesiumJS), inspirado no conceito "Eye of God" com identidade própria.
