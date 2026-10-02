@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WTXTEC · Monitor Global</title>
+
+<link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ build_v }}" />
+</head>
+<body>
+
+<div id="cesiumContainer"></div>
+
+<!-- Cabecalho -->
+<header class="hud hud-top-left">
+  <div class="brand">
+    <span class="brand-mark">WTXTEC</span>
+    <span class="brand-sub">MONITOR GLOBAL</span>
+  </div>
+</header>
+
+<header class="hud hud-top-right">
+  <div class="status-line">
+    <span class="live-dot"></span>
+    <span class="status-label">AO VIVO</span>
+    <span class="status-sep">·</span>
+    <span id="clock" class="status-clock">--:--:--</span>
+    <span class="status-sep">·</span>
+    <span id="connStatus" class="status-conn">CONECTANDO</span>
+  </div>
+</header>
+
+<!-- Busca -->
+<div class="hud search-bar">
+  <input id="searchInput" type="text" placeholder="Buscar no globo..." autocomplete="off" />
+  <div id="searchResults" class="search-results"></div>
+</div>
+
+<!-- Painel de camadas -->
+<aside class="hud panel panel-layers">
+  <div class="panel-title">CAMADAS</div>
+  <label class="layer-row">
+    <input type="checkbox" id="layer-aircraft" />
+    <span class="layer-check"></span>
+    <span class="layer-name">AERONAVES</span>
+  </label>
+  <label class="layer-row layer-row-sub">
+    <input type="checkbox" id="layer-aircraft-mil" />
+    <span class="layer-check"></span>
+    <span class="layer-name">— somente militares</span>
+  </label>
+  <label class="layer-row">
+    <input type="checkbox" id="layer-satellites" />
+    <span class="layer-check"></span>
+    <span class="layer-name">SATÉLITES</span>
+  </label>
+  <label class="layer-row layer-row-sub">
+    <input type="checkbox" id="layer-orbits" />
+    <span class="layer-check"></span>
+    <span class="layer-name">— órbitas (todas)</span>
+  </label>
+  <label class="layer-row">
+    <input type="checkbox" id="layer-cameras" />
+    <span class="layer-check"></span>
+    <span class="layer-name">CÂMERAS PÚBLICAS</span>
+  </label>
+  <!-- Filtro por fonte de imagem das cameras (preenchido em runtime).
+       Fica oculto ate' a camada ser ligada e trazer pelo menos 1 fonte -
+       ver toggle em main.js (layer-cameras) e updateCameraSourceCounts. -->
+  <div class="cam-status-filter cam-source-filter" id="camSourceFilter" style="display:none;">
+    <div class="cam-status-title cam-source-title-row">
+      <span>FONTES DE IMAGEM</span>
+      <span class="cam-source-actions">
+        <button type="button" id="camSourceAll" title="Marcar todas">todas</button>
+        <button type="button" id="camSourceNone" title="Desmarcar todas">nenhuma</button>
+      </span>
+    </div>
+    <div id="camSourceList" class="cam-source-list"></div>
+  </div>
+  <label class="layer-row">
+    <input type="checkbox" id="layer-ships" />
+    <span class="layer-check"></span>
+    <span class="layer-name">NAVIOS (AIS)</span>
+  </label>
+  <label class="layer-row">
+    <input type="checkbox" id="layer-powerplants" />
+    <span class="layer-check"></span>
+    <span class="layer-name">USINAS DE ENERGIA</span>
+    <span id="badge-powerplants" class="layer-badge">CARREGANDO</span>
+  </label>
+  <label class="layer-row layer-row-sub">
+    <input type="checkbox" id="pp-hydro" checked />
+    <span class="layer-check"></span>
+    <span class="layer-name">— hidrelétrica <span class="layer-count" id="pp-count-hydro"></span></span>
+  </label>
+  <label class="layer-row layer-row-sub">
+    <input type="checkbox" id="pp-nuclear" checked />
+    <span class="layer-check"></span>
+    <span class="layer-name">— nuclear <span class="layer-count" id="pp-count-nuclear"></span></span>
+  </label>
+  <label class="layer-row layer-row-sub">
+    <input type="checkbox" id="pp-coal" checked />
+    <span class="layer-check"></span>
+    <span class="layer-name">— a carvão <span class="layer-count" id="pp-count-coal"></span></span>
+  </label>
+  <label class="layer-row layer-row-sub">
+    <input type="checkbox" id="pp-solar" checked />
+    <span class="layer-check"></span>
+    <span class="layer-name">— solar <span class="layer-count" id="pp-count-solar"></span></span>
+  </label>
+  <label class="layer-row layer-row-sub">
+    <input type="checkbox" id="pp-wind" checked />
+    <span class="layer-check"></span>
+    <span class="layer-name">— eólica <span class="layer-count" id="pp-count-wind"></span></span>
+  </label>
+  <label class="layer-row" title="Fonte: TeleGeography Submarine Cable Map — uso não comercial">
+    <input type="checkbox" id="layer-cables" />
+    <span class="layer-check"></span>
+    <span class="layer-name">CABOS SUBMARINOS <span class="layer-count" id="count-cables"></span></span>
+    <span id="badge-cables" class="layer-badge">CARREGANDO</span>
+  </label>
+  <label class="layer-row" title="Fonte: OpenStreetMap (Overpass API). Cobertura desigual por região — EUA/Europa muito mais mapeados que Ásia/África/América Latina.">
+    <input type="checkbox" id="layer-datacenters" />
+    <span class="layer-check"></span>
+    <span class="layer-name">DATACENTERS <span class="layer-count" id="count-datacenters"></span></span>
+    <span id="badge-datacenters" class="layer-badge">CARREGANDO</span>
+  </label>
+  <label class="layer-row" title="Varredura ativa de portas + banner passivo + geoIP contra uma lista curada de hosts públicos conhecidos. Sem tentativa de login/exploração — só leitura do que o serviço expõe por conta própria.">
+    <input type="checkbox" id="layer-computers" />
+    <span class="layer-check"></span>
+    <span class="layer-name">COMPUTADORES (REDE) <span class="layer-count" id="count-computers"></span></span>
+    <span id="badge-computers" class="layer-badge">CARREGANDO</span>
+  </label>
+  <label class="layer-row layer-row-sub">
+    <button type="button" id="computersRescanBtn" class="layer-mini-btn">↻ forçar nova varredura</button>
+  </label>
+  <label class="layer-row">
+    <input type="checkbox" id="layer-boundaries" />
+    <span class="layer-check"></span>
+    <span class="layer-name">DIVISÕES (PAÍS/ESTADO/CIDADE)</span>
+    <span id="badge-boundaries" class="layer-badge">CARREGANDO</span>
+  </label>
+</aside>
+
+<!-- Controles do globo -->
+<div class="hud globe-controls">
+  <button id="ctrl-zoom-in" title="Aproximar">+</button>
+  <button id="ctrl-zoom-out" title="Afastar">−</button>
+  <button id="ctrl-reset" title="Reiniciar camera">⟳</button>
+  <button id="ctrl-locate" title="Minha localizacao">◎</button>
+  <button id="ctrl-fullscreen" title="Tela cheia">⛶</button>
+  <button id="ctrl-streetview" title="Street View: clique no mapa para abrir">SV</button>
+</div>
+
+<!-- Contadores globais -->
+<div class="hud counters">
+  <div class="counter">
+    <span class="counter-value" id="count-aircraft">—</span>
+    <span class="counter-label">AERONAVES</span>
+  </div>
+  <div class="counter">
+    <span class="counter-value" id="count-satellites">—</span>
+    <span class="counter-label">SATÉLITES</span>
+  </div>
+  <div class="counter">
+    <span class="counter-value" id="count-cameras">—</span>
+    <span class="counter-label">CÂMERAS</span>
+  </div>
+  <div class="counter">
+    <span class="counter-value" id="count-ships">—</span>
+    <span class="counter-label">NAVIOS</span>
+  </div>
+</div>
+
+<!-- Painel de informacoes de objeto -->
+<div id="infoPanel" class="hud info-panel hidden">
+  <div class="info-header">
+    <span id="infoTitle">OBJETO</span>
+    <button id="infoClose">×</button>
+  </div>
+  <div id="infoBody" class="info-body"></div>
+</div>
+
+<!-- Google Street View (modal) -->
+<div id="streetViewLightbox" class="camera-lightbox hidden">
+  <div class="camera-lightbox-inner">
+    <div class="camera-lightbox-header">
+      <span id="streetViewTitle">STREET VIEW</span>
+      <button id="streetViewClose" title="Fechar">×</button>
+    </div>
+    <div id="streetViewMedia" class="camera-lightbox-media streetview-media">
+      <iframe id="streetViewFrame" title="Google Street View" allowfullscreen
+        allow="accelerometer; gyroscope; fullscreen"
+        referrerpolicy="no-referrer-when-downgrade"
+        loading="lazy"></iframe>
+    </div>
+    <div class="camera-lightbox-meta">
+      <div class="info-flag live">GOOGLE STREET VIEW</div>
+      <span id="streetViewCoords"></span>
+    </div>
+    <div class="camera-lightbox-actions">
+      <a id="streetViewOpenMaps" class="camera-lightbox-fs-btn" href="#" target="_blank" rel="noopener noreferrer">↗ ABRIR NO GOOGLE MAPS</a>
+      <button type="button" id="streetViewFullscreen" class="camera-lightbox-fs-btn" title="Tela cheia">⛶ TELA CHEIA</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modo ampliado de camera (janela modal — não tela cheia do browser) -->
+<div id="cameraLightbox" class="camera-lightbox hidden">
+  <div class="camera-lightbox-inner">
+    <div class="camera-lightbox-header">
+      <span id="cameraLightboxTitle">CÂMERA</span>
+      <button id="cameraLightboxClose" title="Fechar">×</button>
+    </div>
+    <div id="cameraLightboxMedia" class="camera-lightbox-media">
+      <img id="cameraLightboxImg" class="camera-lightbox-img" alt="Imagem ao vivo da camera (ampliada)" />
+    </div>
+    <div class="camera-lightbox-meta">
+      <div id="cameraLightboxFlag" class="info-flag live">AO VIVO</div>
+      <span id="cameraLightboxSource"></span>
+      <span id="cameraLightboxStatus"></span>
+    </div>
+    <div class="camera-lightbox-actions">
+      <button type="button" id="cameraLightboxFullscreen" class="camera-lightbox-fs-btn" title="Tela cheia">⛶ TELA CHEIA</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
+<script>
+  // Token de acesso do Cesium Ion. Para producao, gerar um token proprio
+  // gratuito em https://ion.cesium.com e colocar aqui.
+  window.WTX_CESIUM_TOKEN = "{{ cesium_token|default('') }}";
+  window.WTX_GOOGLE_MAPS_KEY = "{{ google_maps_key|default('') }}";
+</script>
+<script src="{{ url_for('static', filename='js/globe.js') }}?v={{ build_v }}"></script>
+<script src="{{ url_for('static', filename='js/boundaries.js') }}?v={{ build_v }}"></script>
+<script src="{{ url_for('static', filename='js/airports.js') }}?v={{ build_v }}"></script>
+<script src="{{ url_for('static', filename='js/aircraft.js') }}?v={{ build_v }}"></script>
+<!-- satellite.js: propagador SGP4 no navegador, usado por satellites.js
+     pra calcular posicao localmente a partir do TLE, sem repetir fetch
+     ao servidor a cada poucos segundos (ver comentario em satellites.js). -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/5.0.0/satellite.min.js"></script>
+<script src="{{ url_for('static', filename='js/satellites.js') }}?v={{ build_v }}"></script>
+<script src="{{ url_for('static', filename='js/cameras.js') }}?v={{ build_v }}"></script>
+<script src="{{ url_for('static', filename='js/ships.js') }}?v={{ build_v }}"></script>
+<!-- infrastructure.js: cabos submarinos / datacenters / usinas de
+     energia (INFRAFISICA.md). Só "usinas" está implementado por
+     enquanto (Bloco 2); cabos e datacenters são Blocos 1 e 3. -->
+<script src="{{ url_for('static', filename='js/infrastructure.js') }}?v={{ build_v }}"></script>
+<script src="{{ url_for('static', filename='js/computers.js') }}?v={{ build_v }}"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}?v={{ build_v }}"></script>
+</body>
+</html>

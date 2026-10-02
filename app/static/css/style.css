@@ -1,0 +1,996 @@
+:root {
+  /* Paleta tatica: grafite/preto neutro, sem neon. O unico acento de cor
+     e um ambar apagado usado com moderacao (status, LIVE, selecao) -
+     igual a instrumentacao militar/centro de operacoes real, nao a
+     estetica "cyberpunk" de azul brilhante e glow. */
+  --bg-deep: #08090a;
+  --bg-panel: rgba(17, 18, 17, 0.88);
+  --bg-panel-solid: #121312;
+  --border-soft: rgba(180, 180, 165, 0.14);
+  --border-strong: rgba(180, 180, 165, 0.28);
+  --accent: #c9a227;
+  --accent-dim: #7a6318;
+  --accent-glow: rgba(201, 162, 39, 0.25);
+  --text-primary: #e7e6e0;
+  --text-secondary: #8a8d84;
+  --text-faint: #55584f;
+  --demo-color: #b0752c;
+  --live-color: #8fae63;
+  --danger: #b8503f;
+  --radius: 2px;
+  --font-display: 'Rajdhani', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  overflow: hidden;
+}
+
+#cesiumContainer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.cesium-viewer-bottom,
+.cesium-viewer-toolbar,
+.cesium-viewer-animationContainer,
+.cesium-viewer-timelineContainer,
+.cesium-viewer-fullscreenContainer {
+  display: none !important;
+}
+
+.hud {
+  position: absolute;
+  z-index: 20;
+  font-family: var(--font-mono);
+}
+
+/* ---------- Cabecalho ---------- */
+
+.hud-top-left {
+  top: 20px;
+  left: 24px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  font-family: var(--font-display);
+}
+
+.brand-mark {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--text-primary);
+}
+
+.brand-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  border-top: 1px solid var(--border-strong);
+  padding-top: 4px;
+}
+
+.hud-top-right {
+  top: 22px;
+  right: 24px;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  padding: 7px 12px;
+  border-radius: var(--radius);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--live-color);
+  animation: blink 1.6s step-start infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0.25; }
+}
+
+.status-label { color: var(--live-color); letter-spacing: 0.12em; font-weight: 600; }
+.status-sep { color: var(--text-faint); }
+.status-clock { color: var(--text-primary); }
+.status-conn { color: var(--text-secondary); }
+
+/* ---------- Busca ---------- */
+
+.search-bar {
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 320px;
+}
+
+.search-bar input {
+  width: 100%;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.search-bar input::placeholder { color: var(--text-faint); }
+.search-bar input:focus { border-color: var(--border-strong); }
+
+.search-results {
+  margin-top: 4px;
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  overflow: hidden;
+  overflow-y: auto;
+  max-height: 320px;
+  display: none;
+}
+
+.search-results.visible { display: block; }
+
+.search-result-item {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover { background: rgba(201, 162, 39, 0.06); color: var(--text-primary); }
+
+.search-result-kind {
+  display: inline-block;
+  min-width: 58px;
+  margin-right: 6px;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+/* ---------- Painel de camadas ---------- */
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.panel-layers {
+  top: 96px;
+  left: 24px;
+  width: 210px;
+  /* BUGFIX: antes usava max-height baseado so' na altura da janela
+     (calc(100vh - 180px)), sem levar em conta a barra de contadores
+     (.counters, fixa em bottom:92px). Em janelas mais baixas o painel
+     de camadas crescia por baixo dela, sobrepondo os numeros. Agora
+     fixamos tambem o "bottom", entao a altura se ajusta sozinha (topo
+     e base absolutos) e nunca invade a barra de contadores - so' o
+     conteudo interno rola (overflow-y already presente abaixo).
+  */
+  bottom: 168px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.panel-layers::-webkit-scrollbar {
+  width: 4px;
+}
+.panel-layers::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 2px;
+}
+
+
+.panel-title {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border-strong);
+  padding-bottom: 8px;
+}
+
+.panel-subtitle {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+  margin: 14px 0 7px;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.layer-row input { display: none; }
+
+.layer-check {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--text-faint);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.layer-row input:checked + .layer-check {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.layer-row input:checked + .layer-check::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: -1px;
+  width: 4px;
+  height: 7px;
+  border: solid var(--bg-deep);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.layer-name {
+  flex: 1;
+  color: var(--text-primary);
+  letter-spacing: 0.03em;
+  font-size: 12px;
+}
+
+.layer-badge {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  padding: 2px 5px;
+  color: var(--demo-color);
+  border: 1px solid var(--demo-color);
+}
+
+.layer-badge.live {
+  color: var(--live-color);
+  border-color: var(--live-color);
+}
+
+.layer-row-sub {
+  padding-left: 14px;
+  opacity: 0.85;
+}
+
+.layer-count {
+  color: var(--text-secondary);
+  opacity: 0.75;
+  font-size: 10px;
+}
+
+.layer-row-sub .layer-name {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.layer-mini-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: var(--text-secondary);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: "IBM Plex Mono", monospace;
+}
+.layer-mini-btn:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+
+/* ---------- Controles do globo ---------- */
+
+.globe-controls {
+  right: 24px;
+  bottom: 92px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.globe-controls button {
+  width: 34px;
+  height: 34px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  color: var(--text-secondary);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.globe-controls button:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* ---------- Contadores ---------- */
+
+.counters {
+  left: 24px;
+  bottom: 92px;
+  display: flex;
+  gap: 20px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 10px 18px;
+}
+
+.counter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.counter-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.counter-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--text-faint);
+}
+
+/* ---------- Painel de informacoes de objeto ---------- */
+
+.info-panel {
+  top: 96px;
+  right: 24px;
+  width: 260px;
+  /* Tamanho da versao indexada (v0.0.1): painel compacto lateral.
+     max-height evita invadir os controles do globo; o corpo rola
+     se o conteudo passar. */
+  max-height: calc(100vh - 190px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 0;
+  overflow: hidden;
+  transition: opacity 0.12s ease;
+}
+
+.info-panel.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.info-header {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.info-header button {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font-size: 15px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.info-body {
+  padding: 12px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.info-body::-webkit-scrollbar {
+  width: 4px;
+}
+.info-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 2px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  color: var(--text-secondary);
+}
+
+.info-row span:first-child { flex: 0 0 auto; }
+.info-row span:last-child {
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-word;
+}
+
+.info-flag {
+  margin-top: 3px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--demo-color);
+  border: 1px solid var(--demo-color);
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.info-flag.live {
+  color: var(--live-color);
+  border-color: var(--live-color);
+}
+
+/* ---------- Camada de computadores (rede) ---------- */
+.info-ports-title {
+  margin-top: 8px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 6px;
+}
+.info-port-row {
+  margin: 6px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+.info-port-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+}
+.info-port-banner {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-family: "IBM Plex Mono", monospace;
+  word-break: break-word;
+}
+.info-cve {
+  margin-top: 3px;
+  font-size: 10px;
+  color: #f87171;
+}
+.risk-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.risk-baixo, .info-port-badge.risk-baixo { color: #38bdf8; }
+.risk-medio, .info-port-badge.risk-medio { color: #fbbf24; }
+.risk-alto, .info-port-badge.risk-alto { color: #fb923c; }
+.risk-critico, .info-port-badge.risk-critico { color: #f87171; }
+.risk-pill.risk-baixo { background: rgba(56, 189, 248, 0.18); }
+.risk-pill.risk-medio { background: rgba(251, 191, 36, 0.18); }
+.risk-pill.risk-alto { background: rgba(251, 146, 60, 0.18); }
+.risk-pill.risk-critico { background: rgba(248, 113, 113, 0.18); }
+
+.info-video-wrap {
+  position: relative;
+  margin-top: 3px;
+}
+
+/* Mini player (painel lateral): sem hover/clique no proprio video - a
+   unica interacao possivel e o botao AMPLIAR (que fica por cima, com
+   z-index maior, e continua clicavel normalmente). Isso complementa o
+   controls=0 do iframe do YouTube e o video.controls=false do HLS em
+   main.js: mesmo que o player mude, o hover nunca revela barra aqui. */
+.info-video--mini {
+  pointer-events: none;
+}
+
+.info-video-expand {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--border-soft);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  padding: 4px 7px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.info-video-expand:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* ---------- Modo ampliado de camera (lightbox) ---------- */
+
+.camera-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(4, 5, 5, 0.86);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.12s ease;
+}
+
+.camera-lightbox.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.camera-lightbox-inner {
+  width: min(90vw, 1100px);
+  max-height: 92vh;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.camera-lightbox-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--text-secondary);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-strong);
+  flex-shrink: 0;
+}
+
+.camera-lightbox-header button {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.camera-lightbox-media {
+  position: relative;
+  width: 100%;
+  background: #0d0e0d;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-lightbox-img,
+.camera-lightbox-media video,
+.camera-lightbox-media iframe {
+  width: 100%;
+  max-height: 68vh;
+  object-fit: contain;
+  background: #0d0e0d;
+  display: block;
+  border: none;
+}
+
+.camera-lightbox-media iframe {
+  aspect-ratio: 16 / 9;
+  height: min(68vh, 560px);
+  max-height: 68vh;
+}
+
+.camera-lightbox-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.camera-lightbox-meta .info-flag {
+  margin-top: 0;
+}
+
+.camera-lightbox-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.camera-lightbox-fs-btn {
+  background: rgba(201, 162, 39, 0.1);
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.camera-lightbox-fs-btn:hover {
+  background: rgba(201, 162, 39, 0.22);
+}
+
+.info-video {
+  margin-top: 3px;
+  width: 100%;
+  height: 108px;
+  background: repeating-linear-gradient(
+    45deg,
+    #0d0e0d,
+    #0d0e0d 8px,
+    #101110 8px,
+    #101110 16px
+  );
+  border: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  object-fit: cover;
+}
+
+.info-track-btn {
+  margin-top: 5px;
+  background: rgba(201, 162, 39, 0.08);
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 7px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.info-track-btn:hover { background: rgba(201, 162, 39, 0.16); }
+
+.info-extra {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.info-extra-title {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+}
+
+.info-photo {
+  width: 100%;
+  max-height: 105px;
+  object-fit: cover;
+  border: 1px solid var(--border-soft);
+}
+
+.info-flag-icon {
+  width: 18px;
+  height: 13px;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 4px;
+  border: 1px solid var(--border-soft);
+}
+
+.info-mil-badge {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 5px 7px;
+  text-align: center;
+  border: 1px solid;
+}
+
+.info-mil-badge.military {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.info-mil-badge.civil {
+  color: var(--live-color);
+  border-color: var(--live-color);
+}
+
+.info-note {
+  font-size: 9.5px;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
+/* ---------- Responsivo ---------- */
+
+@media (max-width: 900px) {
+  .panel-layers { width: 165px; padding: 10px; }
+  .search-bar { width: 210px; }
+  .counters { gap: 12px; padding: 9px 13px; }
+  .counter-value { font-size: 13px; }
+  .info-panel { width: 205px; }
+}
+
+/* ---------- Semaforo de atualizacao das cameras ---------- */
+/* Filtro por cor que aparece embaixo da linha "CAMERAS PUBLICAS" no
+   painel de camadas. Cada linha liga/desliga um grupo de cameras no
+   globo e mostra quantas estao naquela faixa na regiao visivel. */
+.cam-status-filter {
+  margin: 2px 0 8px 22px;
+  padding: 6px 8px 7px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cam-status-title {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  opacity: 0.45;
+  margin-bottom: 3px;
+}
+
+.cam-status-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+.cam-status-row:hover {
+  opacity: 1;
+}
+
+.cam-status-row input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 9px;
+  height: 9px;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 2px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.cam-status-row input:checked {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(255, 255, 255, 0.72);
+}
+
+.cam-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot);
+  box-shadow: 0 0 6px var(--dot);
+  flex: 0 0 auto;
+}
+
+.cam-status-name {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
+.cam-status-name em {
+  font-style: normal;
+  opacity: 0.45;
+  margin-left: 4px;
+}
+
+.cam-status-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+  flex: 0 0 auto;
+}
+
+/* Linha desmarcada fica visivelmente apagada */
+.cam-status-row:has(input:not(:checked)) {
+  opacity: 0.35;
+}
+
+/* ---------- Filtro por fonte de imagem das cameras ---------- */
+.cam-source-filter {
+  max-height: 180px;
+  margin-bottom: 10px;
+}
+
+.cam-source-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cam-source-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.cam-source-actions button {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 1px 5px;
+  border-radius: 2px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.cam-source-actions button:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.cam-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 148px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.cam-source-list::-webkit-scrollbar {
+  width: 4px;
+}
+.cam-source-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 2px;
+}
+
+.cam-source-empty {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  opacity: 0.4;
+  padding: 2px 0;
+}
+
+.cam-source-row .cam-status-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.cam-source-row .cam-status-dot {
+  border-radius: 2px;
+  box-shadow: none;
+  opacity: 0.85;
+}
+
+
+/* ---------- Google Street View ---------- */
+.streetview-media {
+  min-height: 360px;
+  height: min(68vh, 520px);
+}
+.streetview-media iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  border: 0;
+  background: #0d0e0d;
+}
+#ctrl-streetview.active {
+  background: rgba(66, 133, 244, 0.35);
+  border-color: #4285f4;
+  color: #8ab4f8;
+}
+.cesium-viewer.sv-pick-mode,
+.cesium-viewer.sv-pick-mode .cesium-widget canvas {
+  cursor: crosshair !important;
+}
+a.camera-lightbox-fs-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.info-sv-btn {
+  margin-top: 6px;
+  background: rgba(66, 133, 244, 0.12);
+  border: 1px solid rgba(66, 133, 244, 0.45);
+  color: #8ab4f8;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 7px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.12s ease;
+}
+.info-sv-btn:hover {
+  background: rgba(66, 133, 244, 0.25);
+}
