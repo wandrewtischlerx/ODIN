@@ -3,8 +3,12 @@
   <img src="capa.png" alt="ODIN Map" width="100%">
 </p>
 
-Protótipo funcional de plataforma de monitoramento global com globo 3D
-(CesiumJS), inspirado no conceito "Eye of God" com identidade própria.
+Protótipo funcional de uma plataforma independente de visualização e monitoramento global baseada em dados públicos e abertos. O sistema utiliza um globo terrestre 3D desenvolvido com CesiumJS para representar diferentes camadas de informações geográficas, infraestrutura e eventos ao redor do mundo.
+
+A interface foi concebida com uma estética de centro de monitoramento, combinando visualização tridimensional, dados geoespaciais e diferentes fontes públicas em uma única representação global. O conceito visual foi inspirado na ideia de uma visão abrangente do planeta, remetendo ao conceito “Eye of God”, mas com identidade, arquitetura e propósito próprios.
+
+O projeto busca explorar como dados públicos podem ser organizados, relacionados e apresentados de forma visual, permitindo observar o planeta a partir de diferentes perspectivas e camadas de informação.
+
 
 ## Rodando localmente
 
